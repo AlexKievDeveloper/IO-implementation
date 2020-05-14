@@ -10,12 +10,10 @@ public class BufferedInputStream extends InputStream {
 
     private byte[] buffer;
     protected int position;//текущая позиция в буфере позиция байта который будет прочитан следующим
-    protected int count = position+1;//Индекс на единицу больше, чем индекс последнего действительного байта в буфере
-    // То есть позиция куда будем записывать следующий байт
-
 
     public BufferedInputStream(InputStream inputStream){ //откуда будем читать байты
         buffer = new byte[DEFAULT_BUFFER_SIZE];
+        this.inputStream = inputStream;
     }
     public BufferedInputStream(InputStream inputStream, int size){
         if (size <= 0) {
@@ -25,96 +23,91 @@ public class BufferedInputStream extends InputStream {
         buffer = new byte[size];
     }
 
-
     @Override
     public int read() throws IOException {
-        // должен возвращать не количество считанных байтов, а значение
-        // сначала считываем все байты, а потом записываем в буфер считываем из входящего потока и записываем в себя (массив buffer)
-        // Читает по одному байту из входящего масива также как InputStream
-      /*  = inputStream.read(buffer);
-        position++;*/
-        int current = inputStream.read(buffer);//cчитываем байт из потока в наш массив байтов
-        if (current == -1){ //проверяем если считаный байт был равен -1 то значит входящий поток закончился
-            return -1;
-        }
-        return buffer[position++]; //возвращаем значение считаного байта из нашего массива байтов
+        return inputStream.read();
     }
 
-    public int read(byte[] arg) throws IOException {
-        return read(arg, 0, arg.length);
-/*        //длинна массива из аргумента равна 0 или нет доступных байтов в потоке
-        if (arg.length <= 0 || available() == 0) {
-            return 0;
-        }
-        //внешний буфер меньше чем количество байтов в нашем потоке
-        else if (arg.length < available()) {
-            for (int i = 0; i < arg.length; i++) {
-                arg[i] = (byte) inputStream.read();
-            }
-            return arg.length;
-        }
-        //внешний буфер больше чем количество байтов в нашем потоке
-        else if (arg.length > available()){
-            for (int i = 0; i < available(); i++) {
-                arg[i] = (byte) inputStream.read();
-            }
-            return available();
-        }
-        return 0;*/
-    }
+    //разделим на те что не требуют очищения буфера (emptySpace > len) и на те что
+    // требуют очищения буфера (emptySpace <= len)/создания нового/записи напрямую:
 
     public int read(byte[] b, int off, int len) throws IOException {
-        int emptySpace = buffer.length - position;//количество не заполненых позиций в буфере
-
-        if (available() == 0){ //значения в потоке закончились
-            return -1;
-        }
-
-        //сначала разделим на два направления если available > len и available <= len
-        // потом разделим на те что не
-        //требуют очищения буфера (emptySpace > len) и на те что требуют очищения буфера (emptySpace <= len)/создания нового/записи напрямую
-        if (available() > len){
-            if (emptySpace > len){
-                for (int i = 0; i < len; i++) {
-                    buffer[count++] = (byte) inputStream.read();
+        //количество не заполненых позиций в буфере:
+        int emptySpace = buffer.length - position;
+        //ПРИ НАЛИЧИИ НЕОБХОДИМОГО МЕСТА В БУФЕРЕ ПИШЕМ В БУФЕР:
+        if (emptySpace > len) {
+            int index = position;
+            int numberOfReadBytes = 0;
+            for (int i = 0; i < len; i++) {
+                int currentValue = inputStream.read();
+                if (currentValue != -1) {
+                    buffer[position++] = (byte) currentValue;
+                    numberOfReadBytes++;
                 }
-                System.arraycopy(buffer, position+1, b, off, len);
-                return len;
             }
-            else { //создать новый буфер или напрямую записать в массив b из потока?????
-                buffer = new byte[len];
-                for (int i = 0; i < len; i++) {
-                    buffer[i] = (byte) inputStream.read();
-                }
-                System.arraycopy(buffer, position+1, b, off, len);
-                return len;
-            }
+            System.arraycopy(buffer, index, b, off, len);
+            return numberOfReadBytes;
         }
-
+        //ЕСЛИ В БУФЕРЕ НЕДОСТАТОЧНО МЕСТА ТО ПИШЕМ НАПРЯМУЮ ИЗ ПОТОКА В МАCСИВ???
         else {
-            if (emptySpace > available()){
-                for (int i = 0; i < len; i++) {
-                    buffer[count++] = (byte) inputStream.read();
+            int numberOfReadBytes = 0;
+            for (int i = 0; i < len; i++) {
+                int currentValue = (byte) inputStream.read();
+                if (currentValue != -1) {
+                    b[off++] = (byte) currentValue;
+                    numberOfReadBytes++;
                 }
-                System.arraycopy(buffer, position+1, b, off, available());
-                return len;
+                else return numberOfReadBytes;
             }
-            else { //создать новый буфер или напрямую записать в массив b из потока?????
-                buffer = new byte[available()];
-                for (int i = 0; i < available(); i++) {
-                    buffer[i] = (byte) inputStream.read();
-                }
-                System.arraycopy(buffer, position+1, b, off, available());
-                return available();
-            }
+            return numberOfReadBytes;
         }
-    }
-
-    @Override
-    public int available() throws IOException {
-        return inputStream.available();
     }
 }
+
+
+/*
+        int current = inputStream.read();//ИСПОЛЬЗУЕТСЯ МЕТОД ИЗ КЛАССА BYTEARRAY!!!!!
+        //проверяем если считаный байт был равен -1 то значит входящий поток закончился и нам не нужно записывать
+        // значение в буфер
+        if (current == -1){
+            return -1;
+        }
+        buffer[position] = (byte) current;
+        return buffer[position++]; //возвращаем значение считаного байта из нашего массива байтов*/
+
+/* if (emptySpace > len){
+         for (int i = 0; i < len; i++) {
+        buffer[count++] = (byte) inputStream.read();
+        }
+        System.arraycopy(buffer, position+1, b, off, len);
+        return len;
+        }
+        else { //создать новый буфер или напрямую записать в массив b из потока?????
+        buffer = new byte[len];
+        for (int i = 0; i < len; i++) {
+        buffer[i] = (byte) inputStream.read();
+        }
+        System.arraycopy(buffer, position+1, b, off, len);
+        return len;
+        }
+
+
+
+        for (int i = 0; i < len; i++) {
+        inputStream.read();
+        }
+        System.arraycopy(buffer, position, b, off, available());
+        return len;
+        }
+        else { //создать новый буфер или напрямую записать в массив b из потока?????
+        buffer = new byte[available()];
+        for (int i = 0; i < available(); i++) {
+        buffer[i] = (byte) inputStream.read();
+        }
+        System.arraycopy(buffer, position+1, b, off, available());
+        return available();
+        }*/
+
 /*        public int read(byte[] buffer, int off, int len) throws IOException {
          int unreadedCount = array.length - index;
         if (array.length == index) {
@@ -130,14 +123,20 @@ public class BufferedInputStream extends InputStream {
             System.arraycopy(array, index, buffer, off, len);
             index+= len;
             return len;
-        }*/
-   /*
+        }
+
+ // должен возвращать не количество считанных байтов, а значение
+        // сначала считываем все байты, а потом записываем в буфер считываем из входящего потока и записываем в себя (массив buffer)
+        // Читает по одному байту из входящего масива также как InputStream
+        = inputStream.read(buffer);
+        position++;*/ //cчитываем байт из потока в наш массив байтов
 
         //если количество элементов которые нужно записать во входящий массив равно или больше количества свободных мест
         //в нашем буфере то мы сбросим (запишем) все элементы находящиеся в буфере во входящий массив а потом напрямую
         //прочитаем из входящего потока оставшееся количество элементов?
         // position - количество заполненных позиций в буфере
 
+/*
         if (emptySpace > len){  // если количество свободных мест в буфере больше чем количество элементов которые
             //необходимо записать то записываем элементы в буфер из потока
             for (int i = 0; i < len; i++) {
@@ -163,4 +162,31 @@ public class BufferedInputStream extends InputStream {
         }
         else {
             System.arraycopy(buffer, position+1, b, off, len);
-            return len;*/
+            return len;
+
+
+        //длинна массива из аргумента равна 0 или нет доступных байтов в потоке
+        if (arg.length <= 0 || available() == 0) {
+            return 0;
+        }
+        //внешний буфер меньше чем количество байтов в нашем потоке
+        else if (arg.length < available()) {
+            for (int i = 0; i < arg.length; i++) {
+                arg[i] = (byte) inputStream.read();
+            }
+            return arg.length;
+        }
+        //внешний буфер больше чем количество байтов в нашем потоке
+        else if (arg.length > available()){
+            for (int i = 0; i < available(); i++) {
+                arg[i] = (byte) inputStream.read();
+            }
+            return available();
+        }
+        return 0;
+
+
+        public int read(byte[] arg) throws IOException {
+        return read(arg, 0, arg.length);
+    }
+        */

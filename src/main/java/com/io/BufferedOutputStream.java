@@ -41,7 +41,7 @@ public class BufferedOutputStream extends OutputStream {
 
     @Override
     public void write(byte[] array, int off, int len) throws IOException {//ЗАПИСЫВАЕМ ДАНЫЕ ИЗ МАССИВА ARRAY В НАШ OUTPUT STREAM
-        int emptySpace = array.length - count; //если длинна массива который нужно записать в поток -
+        int emptySpace = array.length - count; //длинна массива который нужно записать в поток -
         //количество элементов находящихся в буфере = количество свободных мест в буфере
         if (emptySpace <= len){ // если количество элементов которые необходимо записать больше или равно свободному
             //месту в буфере то мы
