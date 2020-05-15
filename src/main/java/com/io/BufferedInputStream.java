@@ -9,13 +9,15 @@ public class BufferedInputStream extends InputStream {
     private InputStream inputStream;
 
     private byte[] buffer;
-    protected int position;//текущая позиция в буфере позиция байта который будет прочитан следующим
+    protected int position; //текущая позиция в буфере позиция байта который будет прочитан следующим
+    protected int count;//количество вычитанных элементов
 
-    public BufferedInputStream(InputStream inputStream){ //откуда будем читать байты
+    public BufferedInputStream(InputStream inputStream) { //откуда будем читать байты
         buffer = new byte[DEFAULT_BUFFER_SIZE];
         this.inputStream = inputStream;
     }
-    public BufferedInputStream(InputStream inputStream, int size){
+
+    public BufferedInputStream(InputStream inputStream, int size) {
         if (size <= 0) {
             throw new IllegalArgumentException("Incorrect buffer size: " + size);
         }
@@ -25,46 +27,75 @@ public class BufferedInputStream extends InputStream {
 
     @Override
     public int read() throws IOException {
-        return inputStream.read();
-    }
+        if (position == count) {
+            count = inputStream.read(buffer);
+        }
 
-    //разделим на те что не требуют очищения буфера (emptySpace > len) и на те что
-    // требуют очищения буфера (emptySpace <= len)/создания нового/записи напрямую:
+        if (count == -1) {
+            return -1;
+        }
+        return buffer[position++];
+    }
 
     public int read(byte[] b, int off, int len) throws IOException {
         //количество не заполненых позиций в буфере:
         int emptySpace = buffer.length - position;
-        //ПРИ НАЛИЧИИ НЕОБХОДИМОГО МЕСТА В БУФЕРЕ ПИШЕМ В БУФЕР:
-        if (emptySpace > len) {
-            int index = position;
-            int numberOfReadBytes = 0;
-            for (int i = 0; i < len; i++) {
-                int currentValue = inputStream.read();
-                if (currentValue != -1) {
-                    buffer[position++] = (byte) currentValue;
-                    numberOfReadBytes++;
-                }
+        int availableValuesInBuffer = count - position;
+
+        //1) В буфере достаточно элементов чтобы заполнить массив
+        if (availableValuesInBuffer >= len) {
+            System.arraycopy(buffer, position, b, off, len);
+            return len;
+        }
+
+        //2) В буфере недостаточно элементов чтобы заполнить массив
+        else {
+            System.arraycopy(buffer, position, b, off, availableValuesInBuffer);
+            for (int i = 0; i < len - availableValuesInBuffer; i++) {
+                b[off + availableValuesInBuffer++] = (byte) inputStream.read();
             }
-            System.arraycopy(buffer, index, b, off, len);
-            return numberOfReadBytes;
+        }
+        System.arraycopy(buffer, position, b, off, len - availableValuesInBuffer);
+        return 0;
+    }
+
+        @Override
+        public void close () throws IOException {
+            inputStream.close();
+        }
+    }
+
+
+
+
+
+//ПРИ НАЛИЧИИ НЕОБХОДИМОГО МЕСТА В БУФЕРЕ ПИШЕМ В БУФЕР:
+/*            if (emptySpace > len) {
+                    int index = position;
+                    int numberOfReadBytes = 0;
+                    for (int i = 0; i < len; i++) {
+        int currentValue = inputStream.read();
+        if (currentValue != -1) {
+        buffer[position++] = (byte) currentValue;
+        numberOfReadBytes++;
+        }
+        }
+        System.arraycopy(buffer, index, b, off, len);
+        return numberOfReadBytes;
         }
         //ЕСЛИ В БУФЕРЕ НЕДОСТАТОЧНО МЕСТА ТО ПИШЕМ НАПРЯМУЮ ИЗ ПОТОКА В МАCСИВ???
         else {
-            int numberOfReadBytes = 0;
-            for (int i = 0; i < len; i++) {
-                int currentValue = (byte) inputStream.read();
-                if (currentValue != -1) {
-                    b[off++] = (byte) currentValue;
-                    numberOfReadBytes++;
-                }
-                else return numberOfReadBytes;
-            }
-            return numberOfReadBytes;
+        int numberOfReadBytes = 0;
+        for (int i = 0; i < len; i++) {
+        int currentValue = (byte) inputStream.read();
+        if (currentValue != -1) {
+        b[off++] = (byte) currentValue;
+        numberOfReadBytes++;
+        } else return numberOfReadBytes;
         }
-    }
-}
-
-
+        return numberOfReadBytes;
+        }
+        }*/
 /*
         int current = inputStream.read();//ИСПОЛЬЗУЕТСЯ МЕТОД ИЗ КЛАССА BYTEARRAY!!!!!
         //проверяем если считаный байт был равен -1 то значит входящий поток закончился и нам не нужно записывать
